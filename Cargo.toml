@@ -1,0 +1,25 @@
+[package]
+name = "ecommerce"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4.9.0"
+chrono = { version= "0.4.38", features = ["serde"]}
+serde = { version = "1.0.210", features = ["derive"] }
+diesel = { version = "2.2.2", features = ["postgres", "r2d2", "chrono", "uuid"] }
+dotenv = "0.15.0"
+argon2 = { version = "0.5.3", features = ["std"] }
+rand = "0.8.5"
+uuid = {version= "1.10.0", features=["v4", "serde"]}
+tracing-actix-web = "0.7.13"
+tracing = { version = "0.1.40", features = ["log"] }
+tokio = "1.40.0"
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
+tracing-bunyan-formatter = "0.3"
+tracing-log = "0.2.0"
+regex = "1.10.6"
+unicode-segmentation = "1.12.0"
+thiserror = "1.0.64"
+anyhow = "1.0.89"
+actix-session = { version = "0.10.1", features = ["redis-session-rustls"] }

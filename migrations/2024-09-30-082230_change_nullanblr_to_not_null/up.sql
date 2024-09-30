@@ -1,0 +1,6 @@
+ALTER TABLE orders
+ALTER COLUMN customer_id SET NOT NULL;
+ALTER TABLE orders
+ALTER COLUMN product_id SET NOT NULL;
+ALTER TABLE orders
+ALTER COLUMN created_at SET NOT NULL;
