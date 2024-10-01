@@ -1,5 +1,5 @@
 use actix_web::{web, App, HttpServer};
-pub mod authentication;
+pub mod Errors;
 mod db;
 mod db_models;
 pub mod routes;

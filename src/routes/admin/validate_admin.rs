@@ -1,8 +1,8 @@
 use super::admin::LoginAdminBody;
 use crate::db::PgPool;
 use crate::db_models::Admin;
-use crate::routes::admin::admin_error::AdminError;
 use crate::schema::admins::dsl::*;
+use crate::Errors::custom::CustomError;
 use argon2::{self, Argon2, PasswordHash, PasswordVerifier};
 use diesel::prelude::*;
 use tracing::instrument;
@@ -12,7 +12,7 @@ use uuid::Uuid;
 async fn get_stored_admin_credentials(
     user_name: &str,
     pool: &PgPool,
-) -> Result<(Uuid, String), AdminError> {
+) -> Result<(Uuid, String), CustomError> {
     let mut conn = pool.get().expect("Failed to get db connection from pool");
 
     let row: Result<Option<Vec<(String, Uuid)>>, diesel::result::Error> = admins
@@ -26,18 +26,18 @@ async fn get_stored_admin_credentials(
             if let Some((hash_password, id_user)) = vec.into_iter().next() {
                 (id_user, hash_password)
             } else {
-                return Err(AdminError::AuthenticationError(
+                return Err(CustomError::AuthenticationError(
                     "Invalid username or password".to_string(),
                 ));
             }
         }
         Ok(None) => {
-            return Err(AdminError::AuthenticationError(
+            return Err(CustomError::AuthenticationError(
                 "Invalid username or password".to_string(),
             ));
         }
         Err(err) => {
-            return Err(AdminError::DbConnectionError(err.to_string()));
+            return Err(CustomError::DbConnectionError(err.to_string()));
         }
     };
     Ok((id_user, expected_hash_password))
@@ -57,7 +57,7 @@ fn verify_admin_password(expected_hash: &str, candidate: &str) -> bool {
 pub async fn validate_admin_credentials(
     pool: &PgPool,
     req_login: &LoginAdminBody,
-) -> Result<Uuid, AdminError> {
+) -> Result<Uuid, CustomError> {
     let (admin_id, stored_password_hash) =
         get_stored_admin_credentials(&req_login.username, pool).await?;
 
@@ -65,7 +65,7 @@ pub async fn validate_admin_credentials(
     if is_valid {
         return Ok(admin_id);
     } else {
-        return Err(AdminError::AuthenticationError(
+        return Err(CustomError::AuthenticationError(
             "Invalid credentials".to_string(),
         ));
     }

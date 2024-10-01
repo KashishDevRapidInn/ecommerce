@@ -1,10 +1,10 @@
-use super::customer_error::CustomerError;
-use crate::authentication::validate_credentials;
+use super::validate_customer::validate_credentials;
 use crate::db::PgPool;
 use crate::db_models::Customer;
 use crate::schema::customers::dsl::*;
 use crate::session_state::TypedSession;
 use crate::validations::customer::{CustomerEmail, CustomerName};
+use crate::Errors::custom::CustomError;
 use actix_web::{web, HttpResponse, Responder};
 use argon2::{
     self, password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
@@ -12,7 +12,7 @@ use argon2::{
 use diesel::prelude::*;
 use rand::Rng;
 use serde::Deserialize;
-use tracing::{error, info, instrument};
+use tracing::instrument;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
@@ -57,13 +57,13 @@ pub async fn register_customer(
     pool: web::Data<PgPool>,
     req_user: web::Json<CreateCustomerBody>,
     session: TypedSession,
-) -> Result<HttpResponse, CustomerError> {
+) -> Result<HttpResponse, CustomError> {
     let pool = pool.clone();
     let customer_data = req_user.into_inner();
     let user_password = customer_data.password.clone();
     let (validated_name, validated_email) = customer_data
         .validate()
-        .map_err(|err| CustomerError::ValidationError(err.to_string()))?;
+        .map_err(|err| CustomError::ValidationError(err.to_string()))?;
     let uuid = Uuid::new_v4();
     let result = web::block(move || {
         let mut conn = pool.get().expect("Failed to get db connection from Pool");
@@ -72,7 +72,7 @@ pub async fn register_customer(
         let salt = generate_random_salt();
         let password_hashed = argon2
             .hash_password(user_password.as_bytes(), &salt)
-            .map_err(|err| CustomerError::HashingError(err.to_string()))?;
+            .map_err(|err| CustomError::HashingError(err.to_string()))?;
 
         // let user_name = customer_data.username.clone();
         // let user_email = customer_data.email.clone();
@@ -84,12 +84,12 @@ pub async fn register_customer(
                 email.eq(validated_email.as_ref()),
             ))
             .execute(&mut conn)
-            .map_err(|err| CustomerError::QueryError(err.to_string()))?;
+            .map_err(|err| CustomError::QueryError(err.to_string()))?;
 
-        Ok::<_, CustomerError>("User created successfully".to_string())
+        Ok::<_, CustomError>("User created successfully".to_string())
     })
     .await
-    .map_err(|err| CustomerError::BlockingError(err.to_string()))?;
+    .map_err(|err| CustomError::BlockingError(err.to_string()))?;
 
     match result {
         Ok(message) => {
@@ -106,7 +106,7 @@ pub async fn login_customer(
     pool: web::Data<PgPool>,
     req_login: web::Json<LoginCustomerBody>,
     session: TypedSession,
-) -> Result<HttpResponse, CustomerError> {
+) -> Result<HttpResponse, CustomError> {
     let user_id = validate_credentials(&pool, &req_login.into_inner()).await;
 
     match user_id {
@@ -115,7 +115,7 @@ pub async fn login_customer(
             Ok(HttpResponse::Ok().body("Login successful"))
         }
         Err(err) => {
-            return Err(CustomerError::AuthenticationError(err.to_string()))?;
+            return Err(CustomError::AuthenticationError(err.to_string()))?;
         }
     }
 }
@@ -130,17 +130,17 @@ pub async fn update_customer(
     pool: web::Data<PgPool>,
     req_user: web::Json<UpdateCustomerBody>,
     session: TypedSession,
-) -> Result<HttpResponse, CustomerError> {
+) -> Result<HttpResponse, CustomError> {
     let user_id = session
         .get_user_id()
-        .map_err(|err| CustomerError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|err| CustomError::AuthenticationError("User not logged in".to_string()))?;
     let pool = pool.clone();
     let customer_data = req_user.into_inner();
     let (validated_name, validated_email) = customer_data
         .validate()
-        .map_err(|err| CustomerError::ValidationError(err.to_string()))?;
+        .map_err(|err| CustomError::ValidationError(err.to_string()))?;
     if user_id.is_none() {
-        return Err(CustomerError::UserDoesNotExist(
+        return Err(CustomError::AuthenticationError(
             "User not found".to_string(),
         ));
     }
@@ -154,12 +154,12 @@ pub async fn update_customer(
                 email.eq(validated_email.as_ref()),
             ))
             .execute(&mut conn)
-            .map_err(|err| CustomerError::QueryError(err.to_string()))?;
+            .map_err(|err| CustomError::QueryError(err.to_string()))?;
 
-        Ok::<_, CustomerError>("User Updated successfully".to_string())
+        Ok::<_, CustomError>("User Updated successfully".to_string())
     })
     .await
-    .map_err(|err| CustomerError::BlockingError(err.to_string()))?;
+    .map_err(|err| CustomError::BlockingError(err.to_string()))?;
 
     match result {
         Ok(message) => {
@@ -174,13 +174,13 @@ pub async fn update_customer(
 pub async fn view_customer(
     pool: web::Data<PgPool>,
     session: TypedSession,
-) -> Result<HttpResponse, CustomerError> {
+) -> Result<HttpResponse, CustomError> {
     let user_id = session
         .get_user_id()
-        .map_err(|_| CustomerError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
     let mut conn = pool.get().expect("Failed to get db connection from Pool");
     if user_id.is_none() {
-        return Err(CustomerError::UserDoesNotExist(
+        return Err(CustomError::AuthenticationError(
             "User not found".to_string(),
         ));
     }
@@ -190,6 +190,6 @@ pub async fn view_customer(
         .filter(id.eq(user_id))
         .select((username, email))
         .first(&mut conn) // if used load then I would have got Vec<(String, String)>
-        .map_err(|err| CustomerError::QueryError(err.to_string()))?;
+        .map_err(|err| CustomError::QueryError(err.to_string()))?;
     Ok(HttpResponse::Ok().json(customer))
 }

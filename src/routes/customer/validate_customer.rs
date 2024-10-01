@@ -1,8 +1,8 @@
 use crate::db::PgPool;
 use crate::db_models::Customer;
 use crate::routes::customer::customer::LoginCustomerBody;
-use crate::routes::customer::customer_error::CustomerError;
 use crate::schema::customers::dsl::*;
+use crate::Errors::custom::CustomError;
 use argon2::{
     self, password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
 };
@@ -14,7 +14,7 @@ use uuid::Uuid;
 async fn get_stored_credentials(
     user_name: &str,
     pool: &PgPool,
-) -> Result<(Uuid, String), CustomerError> {
+) -> Result<(Uuid, String), CustomError> {
     let mut conn = pool.get().expect("Failed to get db connection from pool");
 
     let row: Result<Option<Vec<(String, Uuid)>>, diesel::result::Error> = customers
@@ -28,18 +28,18 @@ async fn get_stored_credentials(
             if let Some((hash_password, id_user)) = vec.into_iter().next() {
                 (id_user, hash_password)
             } else {
-                return Err(CustomerError::AuthenticationError(
+                return Err(CustomError::AuthenticationError(
                     "Invalid username or password".to_string(),
                 ));
             }
         }
         Ok(None) => {
-            return Err(CustomerError::AuthenticationError(
+            return Err(CustomError::AuthenticationError(
                 "Invalid username or password".to_string(),
             ));
         }
         Err(err) => {
-            return Err(CustomerError::DbConnectionError(err.to_string()));
+            return Err(CustomError::DbConnectionError(err.to_string()));
         }
     };
     Ok((id_user, expected_hash_password))
@@ -58,7 +58,7 @@ fn verify_password(expected_hash: &str, candidate: &str) -> bool {
 pub async fn validate_credentials(
     pool: &PgPool,
     req_login: &LoginCustomerBody,
-) -> Result<Uuid, CustomerError> {
+) -> Result<Uuid, CustomError> {
     let (user_id, stored_password_hash) = get_stored_credentials(&req_login.username, pool)
         .await
         .unwrap();
@@ -67,7 +67,7 @@ pub async fn validate_credentials(
     if is_valid {
         return Ok(user_id);
     } else {
-        return Err(CustomerError::AuthenticationError(
+        return Err(CustomError::AuthenticationError(
             "Invalid credentials".to_string(),
         ));
     }
