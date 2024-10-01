@@ -2,6 +2,7 @@ use super::validate_admin::validate_admin_credentials;
 use crate::db::PgPool;
 use crate::routes::customer::customer_error::CustomerError;
 use crate::schema::admins::dsl as admin_dsl;
+use crate::schema::orders::dsl as orders;
 use crate::session_state::TypedSession;
 use actix_web::{web, HttpResponse, Responder};
 use argon2::{
@@ -10,8 +11,9 @@ use argon2::{
 use diesel::prelude::*;
 use rand::Rng;
 use serde::Deserialize;
-use tracing::{error, info, instrument};
+use tracing::instrument;
 use uuid::Uuid;
+
 #[derive(Deserialize)]
 pub struct CreateAdminBody {
     username: String,
@@ -22,6 +24,12 @@ pub struct CreateAdminBody {
 pub struct LoginAdminBody {
     pub username: String,
     pub password: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateStatusBody {
+    pub order_id: Uuid,
+    pub status: String,
 }
 
 fn generate_random_salt() -> SaltString {
@@ -91,8 +99,44 @@ pub async fn login_admin(
         }
     }
 }
+
 #[instrument(name = "Logout admin", skip(session))]
 pub async fn logout_admin(session: TypedSession) -> impl Responder {
     session.admin_log_out();
     HttpResponse::Ok().body("Login successfull")
+}
+
+#[instrument(name = "Update order status admin", skip(req_update, pool, session))]
+pub async fn update_status(
+    pool: web::Data<PgPool>,
+    req_update: web::Json<UpdateStatusBody>,
+    session: TypedSession,
+) -> Result<HttpResponse, CustomerError> {
+    let admin_id = session
+        .get_admin_id()
+        .map_err(|err| CustomerError::AuthenticationError("User not logged in".to_string()))?;
+    session.renew();
+    let mut conn = pool.get().expect("Failed to get db connection from Pool");
+    let data = req_update.into_inner();
+    if admin_id.is_none() {
+        return Err(CustomerError::AuthenticationError(
+            "User not found".to_string(),
+        ));
+    }
+
+    let admin_id = admin_id.unwrap();
+    let result: Result<String, CustomerError> = web::block(move || {
+        diesel::update(orders::orders.filter(orders::id.eq(data.order_id)))
+            .set(orders::status.eq(data.status.to_string()))
+            .execute(&mut conn)
+            .map_err(|err| CustomerError::QueryError(err.to_string()))?;
+        Ok::<_, CustomerError>("Order Status Updated successfully".to_string())
+    })
+    .await
+    .map_err(|err| CustomerError::BlockingError(err.to_string()))?;
+
+    match result {
+        Ok(message) => Ok(HttpResponse::Ok().body(message)),
+        Err(err) => Err(err),
+    }
 }

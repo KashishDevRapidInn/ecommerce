@@ -14,7 +14,7 @@ use actix_web::cookie::Key;
 use db::establish_connection;
 use dotenv::dotenv;
 use routes::{
-    admin::admin::{login_admin, register_admin},
+    admin::admin::{login_admin, register_admin, update_status},
     customer::customer::{
         login_customer, logout_customer, register_customer, update_customer, view_customer,
     },
@@ -54,6 +54,7 @@ async fn main() -> std::io::Result<()> {
             .route("/orders/list/all", web::get().to(list_orders))
             .route("/admin/register", web::post().to(register_admin))
             .route("/admin/login", web::post().to(login_admin))
+            .route("/admin/update_status", web::post().to(update_status))
     })
     .bind("127.0.0.1:8080")?
     .run()

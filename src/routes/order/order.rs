@@ -39,7 +39,7 @@ pub async fn create_order(
     }
 
     let customer_id = customer_id.unwrap();
-    let _result = web::block(move || {
+    let result = web::block(move || {
         let mut conn = pool.get().expect("Failed to get db connection from Pool");
         diesel::insert_into(order::orders)
             .values((
@@ -55,7 +55,11 @@ pub async fn create_order(
     })
     .await
     .map_err(|err| OrderError::QueryError(err.to_string()))?;
-    Ok(HttpResponse::Created().body("Order Created Successfully"))
+
+    match result {
+        Ok(_) => Ok(HttpResponse::Created().body("Order Created Successfully")),
+        Err(err) => return Err(OrderError::QueryError(err.to_string())),
+    }
 }
 
 #[instrument(name = "Get Order", skip(order_id, pool, session))]
