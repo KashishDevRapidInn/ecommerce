@@ -1,14 +1,11 @@
 use super::validate_customer::validate_credentials;
 use crate::db::PgPool;
-use crate::db_models::Customer;
 use crate::schema::customers::dsl::*;
 use crate::session_state::TypedSession;
 use crate::validations::customer::{CustomerEmail, CustomerName};
 use crate::Errors::custom::CustomError;
 use actix_web::{web, HttpResponse, Responder};
-use argon2::{
-    self, password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-};
+use argon2::{self, password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::prelude::*;
 use rand::Rng;
 use serde::Deserialize;

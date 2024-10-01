@@ -1,5 +1,4 @@
 use crate::db::PgPool;
-use crate::db_models::Product;
 use crate::schema::products::dsl as product_dsl;
 use diesel::prelude::*;
 use uuid::Uuid;

@@ -1,16 +1,9 @@
 use crate::{
-    db::PgPool,
-    db_models::Order,
-    routes::order::order_error::OrderError,
-    schema::{
-        customers::created_at,
-        orders::{dsl as order, product_id},
-    },
-    session_state::TypedSession,
+    db::PgPool, schema::orders::dsl as order, session_state::TypedSession,
+    Errors::custom::CustomError,
 };
 use actix_web::{web, HttpResponse};
-use chrono::NaiveDate;
-use diesel::{prelude::*, sql_types::Timestamp};
+use diesel::prelude::*;
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -24,16 +17,16 @@ pub async fn create_order(
     pool: web::Data<PgPool>,
     req_order: web::Json<CreateOrder>,
     session: TypedSession,
-) -> Result<HttpResponse, OrderError> {
+) -> Result<HttpResponse, CustomError> {
     let customer_id = session
         .get_user_id()
-        .map_err(|err| OrderError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
     let pool = pool.clone();
     let order_data = req_order.into_inner();
     let order_id = Uuid::new_v4();
     let order_created_at = chrono::Local::now().naive_utc();
     if customer_id.is_none() {
-        return Err(OrderError::AuthenticationError(
+        return Err(CustomError::AuthenticationError(
             "User not found".to_string(),
         ));
     }
@@ -50,15 +43,15 @@ pub async fn create_order(
                 order::status.eq("pending".to_string()),
             ))
             .execute(&mut conn)
-            .map_err(|err| OrderError::QueryError(err.to_string()))?;
-        Ok::<_, OrderError>("Order created successfully".to_string())
+            .map_err(|err| CustomError::QueryError(err.to_string()))?;
+        Ok::<_, CustomError>("Order created successfully".to_string())
     })
     .await
-    .map_err(|err| OrderError::QueryError(err.to_string()))?;
+    .map_err(|err| CustomError::QueryError(err.to_string()))?;
 
     match result {
         Ok(_) => Ok(HttpResponse::Created().body("Order Created Successfully")),
-        Err(err) => return Err(OrderError::QueryError(err.to_string())),
+        Err(err) => return Err(CustomError::QueryError(err.to_string())),
     }
 }
 
@@ -67,17 +60,23 @@ pub async fn get_order(
     pool: web::Data<PgPool>,
     order_id: web::Path<Uuid>,
     session: TypedSession,
-) -> Result<HttpResponse, OrderError> {
+) -> Result<HttpResponse, CustomError> {
     let customer_id = session
         .get_user_id()
-        .map_err(|err| OrderError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
+    if customer_id.is_none() {
+        return Err(CustomError::AuthenticationError(
+            "User not found".to_string(),
+        ));
+    }
 
+    let _customer_id = customer_id.unwrap();
     let mut conn = pool.get().expect("Failed to get db connection from Pool");
     let order: (Uuid, Uuid) = order::orders
         .filter(order::id.eq(order_id.into_inner()))
         .select((order::product_id, order::customer_id))
         .first(&mut conn)
-        .map_err(|err| OrderError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
 
     Ok(HttpResponse::Ok().json(order))
 }
@@ -86,12 +85,12 @@ pub async fn get_order(
 pub async fn list_orders(
     pool: web::Data<PgPool>,
     session: TypedSession,
-) -> Result<HttpResponse, OrderError> {
+) -> Result<HttpResponse, CustomError> {
     let customer_id = session
         .get_user_id()
-        .map_err(|err| OrderError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
     if customer_id.is_none() {
-        return Err(OrderError::AuthenticationError(
+        return Err(CustomError::AuthenticationError(
             "User not found".to_string(),
         ));
     }
@@ -104,7 +103,7 @@ pub async fn list_orders(
         .filter(order::customer_id.eq(customer_id))
         .select((order::id, order::product_id))
         .load::<(Uuid, Uuid)>(&mut conn)
-        .map_err(|_| OrderError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
 
     Ok(HttpResponse::Ok().json(order))
 }

@@ -1,11 +1,8 @@
 use crate::db::PgPool;
-use crate::db_models::Customer;
 use crate::routes::customer::customer::LoginCustomerBody;
 use crate::schema::customers::dsl::*;
 use crate::Errors::custom::CustomError;
-use argon2::{
-    self, password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-};
+use argon2::{self, Argon2, PasswordHash, PasswordVerifier};
 use diesel::prelude::*;
 use tracing::instrument;
 use uuid::Uuid;
