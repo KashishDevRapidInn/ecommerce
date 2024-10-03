@@ -1,5 +1,5 @@
 use crate::helper::spawn_app;
-// use ecommerce::db::drop_database;
+use ecommerce::db::drop_database;
 use reqwest::Client;
 
 #[tokio::test]
@@ -15,5 +15,5 @@ async fn health_check_works() {
     println!("Response status: {:?}", status_code);
     assert!(response.status().is_success());
     assert_eq!(Some(0), response.content_length());
-    // drop_database(&app.database_name);
+    drop_database(&app.database_name);
 }
