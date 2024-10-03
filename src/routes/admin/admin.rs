@@ -1,13 +1,12 @@
 use super::validate_admin::validate_admin_credentials;
+use crate::auth_jwt::auth::create_jwt;
 use crate::db::PgPool;
 use crate::schema::admins::dsl as admin_dsl;
 use crate::schema::orders::dsl as orders;
 use crate::session_state::TypedSession;
 use crate::Errors::custom::CustomError;
 use actix_web::{web, HttpResponse, Responder};
-use argon2::{
-    self, password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-};
+use argon2::{self, password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::prelude::*;
 use rand::Rng;
 use serde::Deserialize;
@@ -91,8 +90,10 @@ pub async fn login_admin(
 
     match id_admin {
         Ok(admin_id) => {
+            let token = create_jwt(&id_admin.unwrap().to_string())
+                .map_err(|err| CustomError::AuthenticationError(err.to_string()))?;
             session.insert_admin_id(admin_id);
-            Ok(HttpResponse::Ok().body("Admin Login successful"))
+            Ok(HttpResponse::Ok().body(token))
         }
         Err(err) => {
             return Err(CustomError::AuthenticationError(err.to_string()))?;

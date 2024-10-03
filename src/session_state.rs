@@ -26,10 +26,10 @@ impl TypedSession {
         self.0.renew();
     }
     pub fn insert_admin_id(&self, admin_id: Uuid) -> Result<(), SessionInsertError> {
-        self.0.insert(Self::USER_ID_KEY, admin_id)
+        self.0.insert(Self::ADMIN_ID_KEY, admin_id)
     }
     pub fn get_admin_id(&self) -> Result<Option<Uuid>, SessionGetError> {
-        self.0.get(Self::USER_ID_KEY)
+        self.0.get(Self::ADMIN_ID_KEY)
     }
     pub fn admin_log_out(self) {
         self.0.purge()

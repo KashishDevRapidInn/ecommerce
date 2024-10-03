@@ -1,4 +1,5 @@
 use super::validate_customer::validate_credentials;
+use crate::auth_jwt::auth::create_jwt;
 use crate::db::PgPool;
 use crate::schema::customers::dsl::*;
 use crate::session_state::TypedSession;
@@ -108,8 +109,10 @@ pub async fn login_customer(
 
     match user_id {
         Ok(id_user) => {
+            let token = create_jwt(&id_user.to_string())
+                .map_err(|err| CustomError::AuthenticationError(err.to_string()))?;
             session.insert_user_id(id_user);
-            Ok(HttpResponse::Ok().body("Login successful"))
+            Ok(HttpResponse::Ok().json(token))
         }
         Err(err) => {
             return Err(CustomError::AuthenticationError(err.to_string()))?;
@@ -130,7 +133,7 @@ pub async fn update_customer(
 ) -> Result<HttpResponse, CustomError> {
     let user_id = session
         .get_user_id()
-        .map_err(|err| CustomError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
     let pool = pool.clone();
     let customer_data = req_user.into_inner();
     let (validated_name, validated_email) = customer_data
