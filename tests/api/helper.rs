@@ -8,8 +8,8 @@ use diesel_migrations::MigrationHarness;
 use dotenv::dotenv;
 use ecommerce::db::create_database;
 use ecommerce::db::PgPool;
-use ecommerce::db_models::Customer;
-use ecommerce::schema::customers::{self, dsl::*};
+use ecommerce::schema::admins::{self, dsl as admin_dsl};
+use ecommerce::schema::customers::{self, dsl as customer_dsl};
 use ecommerce::startup::Application;
 use ecommerce::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
@@ -57,15 +57,24 @@ impl TestUser {
         // dbg!(&hashed_password);
         let mut conn = pool.get().expect("Failed to get db connection from pool");
 
-        diesel::insert_into(customers::table)
+        diesel::insert_into(customer_dsl::customers)
             .values((
-                id.eq(self.user_id),
-                username.eq(self.username.clone()),
-                password_hash.eq(hashed_password),
-                email.eq(self.user_email.clone()),
+                customer_dsl::id.eq(self.user_id),
+                customer_dsl::username.eq(self.username.clone()),
+                customer_dsl::password_hash.eq(hashed_password.clone()),
+                customer_dsl::email.eq(self.user_email.clone()),
             ))
             .execute(&mut conn)
-            .expect("Failed to create test users.");
+            .expect("Failed to create test customers.");
+
+        diesel::insert_into(admin_dsl::admins)
+            .values((
+                admin_dsl::id.eq(self.user_id),
+                admin_dsl::username.eq(self.username.clone()),
+                admin_dsl::password_hash.eq(hashed_password.clone()),
+            ))
+            .execute(&mut conn)
+            .expect("Failed to create test admin.");
     }
 }
 
@@ -75,6 +84,7 @@ pub struct TestApp {
     pub db_pool: PgPool,
     pub database_name: String,
     pub test_user: TestUser,
+    pub api_client: reqwest::Client,
 }
 pub fn run_db_migrations(conn: &mut impl MigrationHarness<diesel::pg::Pg>) {
     conn.run_pending_migrations(MIGRATIONS)
@@ -106,11 +116,10 @@ pub async fn spawn_app() -> TestApp {
     let address = format!("http://127.0.0.1:{}", application_port);
     let _ = tokio::spawn(application.run_until_stopped());
 
-    // let client = reqwest::Client::builder()
-    //     .redirect(reqwest::redirect::Policy::none())
-    //     .cookie_store(true)
-    //     .build()
-    //     .unwrap();
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .unwrap();
 
     let testapp = TestApp {
         port: application_port,
@@ -118,6 +127,7 @@ pub async fn spawn_app() -> TestApp {
         db_pool: pool.clone(),
         database_name,
         test_user: TestUser::generate(),
+        api_client: client,
     };
     testapp.test_user.store(&testapp.db_pool).await;
     testapp

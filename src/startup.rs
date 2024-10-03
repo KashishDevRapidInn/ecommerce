@@ -80,7 +80,7 @@ pub async fn run_server(listener: TcpListener, pool: PgPool) -> Result<Server, s
                     .wrap(from_fn(jwt_auth_middleware))
                     .route("/logout", web::post().to(logout_customer))
                     .route("/update", web::post().to(update_customer))
-                    .route("/view", web::post().to(view_customer))
+                    .route("/view", web::get().to(view_customer))
                     .route("/orders/new", web::post().to(create_order))
                     .route("/orders/{id}/view", web::get().to(get_order))
                     .route("/orders/list/all", web::get().to(list_orders))

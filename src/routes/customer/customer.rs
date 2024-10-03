@@ -10,6 +10,7 @@ use argon2::{self, password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::prelude::*;
 use rand::Rng;
 use serde::Deserialize;
+use serde_json::json;
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -112,7 +113,7 @@ pub async fn login_customer(
             let token = create_jwt(&id_user.to_string())
                 .map_err(|err| CustomError::AuthenticationError(err.to_string()))?;
             session.insert_user_id(id_user);
-            Ok(HttpResponse::Ok().json(token))
+            Ok(HttpResponse::Ok().json(json!({"token": token})))
         }
         Err(err) => {
             return Err(CustomError::AuthenticationError(err.to_string()))?;

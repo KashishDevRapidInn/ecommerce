@@ -10,6 +10,7 @@ use argon2::{self, password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::prelude::*;
 use rand::Rng;
 use serde::Deserialize;
+use serde_json;
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -93,7 +94,7 @@ pub async fn login_admin(
             let token = create_jwt(&id_admin.unwrap().to_string())
                 .map_err(|err| CustomError::AuthenticationError(err.to_string()))?;
             session.insert_admin_id(admin_id);
-            Ok(HttpResponse::Ok().body(token))
+            Ok(HttpResponse::Ok().json(serde_json::json!({"token": token})))
         }
         Err(err) => {
             return Err(CustomError::AuthenticationError(err.to_string()))?;
