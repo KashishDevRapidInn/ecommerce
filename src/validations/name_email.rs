@@ -2,10 +2,10 @@
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Debug)]
-pub struct CustomerName(String);
+pub struct UserName(String);
 
-impl CustomerName {
-    pub fn parse(s: String) -> std::result::Result<CustomerName, String> {
+impl UserName {
+    pub fn parse(s: String) -> std::result::Result<UserName, String> {
         let is_empty_or_whitespace = s.trim().is_empty();
         let is_too_long = s.graphemes(true).count() > 256;
         let forbidden_characters = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
@@ -18,7 +18,7 @@ impl CustomerName {
         }
     }
 }
-impl AsRef<str> for CustomerName {
+impl AsRef<str> for UserName {
     fn as_ref(&self) -> &str {
         &self.0
     }
@@ -27,10 +27,10 @@ impl AsRef<str> for CustomerName {
 use regex::Regex;
 
 #[derive(Debug)]
-pub struct CustomerEmail(String);
+pub struct UserEmail(String);
 
-impl CustomerEmail {
-    pub fn parse(s: String) -> std::result::Result<CustomerEmail, String> {
+impl UserEmail {
+    pub fn parse(s: String) -> std::result::Result<UserEmail, String> {
         let email_regex = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
         if email_regex.is_match(&s) {
             Ok(Self(s))
@@ -40,7 +40,7 @@ impl CustomerEmail {
     }
 }
 
-impl AsRef<str> for CustomerEmail {
+impl AsRef<str> for UserEmail {
     fn as_ref(&self) -> &str {
         &self.0
     }

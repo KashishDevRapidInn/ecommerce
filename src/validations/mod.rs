@@ -1,1 +1,1 @@
-pub mod customer;
+pub mod name_email;

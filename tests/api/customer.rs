@@ -6,7 +6,6 @@ use serde_json::{self, Value};
 async fn customer_login_success() {
     //arrange
     let app = spawn_app().await;
-    // let client = Client::new();
 
     //act
     let response = app

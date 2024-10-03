@@ -10,6 +10,7 @@ use ecommerce::db::create_database;
 use ecommerce::db::PgPool;
 use ecommerce::schema::admins::{self, dsl as admin_dsl};
 use ecommerce::schema::customers::{self, dsl as customer_dsl};
+use ecommerce::schema::products::{self, dsl as product_dsl};
 use ecommerce::startup::Application;
 use ecommerce::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
@@ -131,4 +132,27 @@ pub async fn spawn_app() -> TestApp {
     };
     testapp.test_user.store(&testapp.db_pool).await;
     testapp
+}
+
+pub fn seed_products(pool: PgPool) -> Result<(), diesel::result::Error> {
+    let data = vec![(
+        Uuid::parse_str("5fcd7d83-7adf-4d4d-931a-68b9678009db").unwrap(),
+        "Laptop".to_string(),
+        true,
+        50000,
+    )];
+    let mut conn = pool.get().expect("Failed to get db connection from Pool");
+    for (id, name, is_available, price) in data {
+        diesel::insert_into(product_dsl::products)
+            .values((
+                product_dsl::id.eq(id),
+                product_dsl::name.eq(name),
+                product_dsl::is_available.eq(is_available),
+                product_dsl::price.eq(price),
+            ))
+            .execute(&mut conn)?;
+    }
+
+    println!("successfully added products");
+    Ok(())
 }

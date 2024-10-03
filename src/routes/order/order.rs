@@ -50,7 +50,10 @@ pub async fn create_order(
     .map_err(|err| CustomError::QueryError(err.to_string()))?;
 
     match result {
-        Ok(_) => Ok(HttpResponse::Created().body("Order Created Successfully")),
+        Ok(message) => {
+            Ok(HttpResponse::Ok()
+                .json(serde_json::json!({"message": message, "order_id": order_id})))
+        }
         Err(err) => return Err(CustomError::QueryError(err.to_string())),
     }
 }
@@ -72,9 +75,9 @@ pub async fn get_order(
 
     let _customer_id = customer_id.unwrap();
     let mut conn = pool.get().expect("Failed to get db connection from Pool");
-    let order: (Uuid, Uuid) = order::orders
+    let order: (Uuid, Uuid, String) = order::orders
         .filter(order::id.eq(order_id.into_inner()))
-        .select((order::product_id, order::customer_id))
+        .select((order::product_id, order::customer_id, order::status))
         .first(&mut conn)
         .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
 

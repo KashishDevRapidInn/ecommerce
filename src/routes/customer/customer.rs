@@ -3,7 +3,7 @@ use crate::auth_jwt::auth::create_jwt;
 use crate::db::PgPool;
 use crate::schema::customers::dsl::*;
 use crate::session_state::TypedSession;
-use crate::validations::customer::{CustomerEmail, CustomerName};
+use crate::validations::name_email::{UserEmail, UserName};
 use crate::Errors::custom::CustomError;
 use actix_web::{web, HttpResponse, Responder};
 use argon2::{self, password_hash::SaltString, Argon2, PasswordHasher};
@@ -21,9 +21,9 @@ pub struct CreateCustomerBody {
     email: String,
 }
 impl CreateCustomerBody {
-    pub fn validate(self) -> Result<(CustomerName, CustomerEmail), String> {
-        let user_name = CustomerName::parse(self.username)?;
-        let user_email = CustomerEmail::parse(self.email)?;
+    pub fn validate(self) -> Result<(UserName, UserEmail), String> {
+        let user_name = UserName::parse(self.username)?;
+        let user_email = UserEmail::parse(self.email)?;
         Ok((user_name, user_email))
     }
 }
@@ -33,9 +33,9 @@ pub struct UpdateCustomerBody {
     email: String,
 }
 impl UpdateCustomerBody {
-    pub fn validate(self) -> Result<(CustomerName, CustomerEmail), String> {
-        let user_name = CustomerName::parse(self.username)?;
-        let user_email = CustomerEmail::parse(self.email)?;
+    pub fn validate(self) -> Result<(UserName, UserEmail), String> {
+        let user_name = UserName::parse(self.username)?;
+        let user_email = UserEmail::parse(self.email)?;
         Ok((user_name, user_email))
     }
 }
