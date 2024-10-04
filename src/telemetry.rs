@@ -1,9 +1,8 @@
 use tracing::subscriber::set_global_default;
 use tracing::Subscriber;
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
+use tracing_log::LogTracer; // to see actix_Web logger logs as well
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
-//after adding the above code we were not able to see logs from actix-web logger, so to neable that we are using tracing-log
-use tracing_log::LogTracer;
 
 use tracing_subscriber::fmt::MakeWriter;
 

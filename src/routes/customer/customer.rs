@@ -51,6 +51,13 @@ fn generate_random_salt() -> SaltString {
     SaltString::generate(&mut rng)
 }
 
+/******************************************/
+// Registering Customer Route
+/******************************************/
+/**
+ * @route   POST /register
+ * @access  Public
+ */
 #[instrument(name = "Register a new customer", skip(req_user, pool, session), fields(username = %req_user.username, email = %req_user.email))]
 pub async fn register_customer(
     pool: web::Data<PgPool>,
@@ -99,6 +106,13 @@ pub async fn register_customer(
     }
 }
 
+/******************************************/
+// Login Route
+/******************************************/
+/**
+ * @route   POST /login
+ * @access  Public
+ */
 #[instrument(name = "Login a customer", skip(req_login, pool, session), fields(username = %req_login.username))]
 
 pub async fn login_customer(
@@ -120,12 +134,27 @@ pub async fn login_customer(
         }
     }
 }
+
+/******************************************/
+// Logout Customer Route
+/******************************************/
+/**
+ * @route   POST /protected/logout
+ * @access  JWT Protected
+ */
 #[instrument(name = "Logout a customer", skip(session))]
-pub async fn logout_customer(session: TypedSession) -> impl Responder {
+pub async fn logout_customer(session: TypedSession) -> HttpResponse {
     session.log_out();
-    HttpResponse::Ok().body("Login successfull")
+    HttpResponse::Ok().body("Logout successfull")
 }
 
+/******************************************/
+// Updating Customer Profile Route
+/******************************************/
+/**
+ * @route   POST /protected/update
+ * @access  JWT Protected
+ */
 #[instrument(name = "Update customer", skip(req_user, pool, session), fields(username = %req_user.username, email = %req_user.email))]
 pub async fn update_customer(
     pool: web::Data<PgPool>,
@@ -168,6 +197,13 @@ pub async fn update_customer(
     }
 }
 
+/******************************************/
+// View Customer Info Route
+/******************************************/
+/**
+ * @route   Get /protected/view
+ * @access  JWT Protected
+ */
 #[instrument(name = "Get customer", skip(pool, session))]
 pub async fn view_customer(
     pool: web::Data<PgPool>,
@@ -182,8 +218,9 @@ pub async fn view_customer(
             "User not found".to_string(),
         ));
     }
-
     let user_id = user_id.unwrap();
+
+    println!("User session: {}", user_id);
     let customer: (String, String) = customers
         .filter(id.eq(user_id))
         .select((username, email))

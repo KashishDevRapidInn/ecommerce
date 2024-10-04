@@ -43,6 +43,13 @@ fn generate_random_salt() -> SaltString {
     SaltString::generate(&mut rng)
 }
 
+/******************************************/
+// Registering Admin Route
+/******************************************/
+/**
+ * @route   POST /admin/register
+ * @access  Public
+ */
 #[instrument(name = "Register Admin", skip(req_admin, pool, session))]
 pub async fn register_admin(
     pool: web::Data<PgPool>,
@@ -88,6 +95,13 @@ pub async fn register_admin(
     }
 }
 
+/******************************************/
+// Login Admin Route
+/******************************************/
+/**
+ * @route   POST /admin/login
+ * @access  Public
+ */
 #[instrument(name = "Login admin", skip(req_login, pool, session))]
 
 pub async fn login_admin(
@@ -110,12 +124,26 @@ pub async fn login_admin(
     }
 }
 
+/******************************************/
+// Logout Admin Route
+/******************************************/
+/**
+ * @route   POST /protected/admin/logout
+ * @access  JWT Protected
+ */
 #[instrument(name = "Logout admin", skip(session))]
 pub async fn logout_admin(session: TypedSession) -> impl Responder {
     session.admin_log_out();
     HttpResponse::Ok().body("Login successfull")
 }
 
+/******************************************/
+// Updating Order Status Route
+/******************************************/
+/**
+ * @route   POST /protected/admin/update_status
+ * @access  JWT Protected
+ */
 #[instrument(name = "Update order status admin", skip(req_update, pool, session))]
 pub async fn update_status(
     pool: web::Data<PgPool>,

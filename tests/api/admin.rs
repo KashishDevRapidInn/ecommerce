@@ -1,6 +1,7 @@
 use crate::helper::{seed_products, spawn_app};
 use ecommerce::db::drop_database;
 use serde_json::{self, Value};
+use uuid::Uuid;
 
 #[tokio::test]
 async fn admin_login_success() {
@@ -87,5 +88,39 @@ async fn order_creation_get_and_list() {
     let order_reterive_response = app.get_order(order_id, token.to_string()).await;
     let order_reterive_response_text = order_reterive_response.text().await.unwrap();
     assert!(order_reterive_response_text.contains("shipped"));
+    drop_database(&app.database_name);
+}
+
+#[tokio::test]
+async fn admin_logout_check() {
+    let app = spawn_app().await;
+
+    // Step: 1= Admin login and getting jwt token
+    let admin_login_body = serde_json::json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password
+    });
+    let admin_login_response = app.login_admin(admin_login_body).await;
+
+    let admin_login_response: Value = admin_login_response.json().await.unwrap();
+    let admin_token = admin_login_response["token"]
+        .as_str()
+        .expect("Token not found");
+
+    // Step: 2= Logout Admin
+    let logout_response = app.logout_admin(admin_token.to_string()).await;
+
+    assert_eq!(logout_response.status().as_u16(), 200);
+
+    //Step: 3= Verifying logout
+    let update_status_body = serde_json::json!({
+        "order_id": Uuid::new_v4(),
+        "status": "shipped"
+    });
+    let update_status_response = app
+        .update_order_status(update_status_body, admin_token.to_string())
+        .await;
+
+    assert_eq!(update_status_response.status().as_u16(), 401);
     drop_database(&app.database_name);
 }

@@ -167,6 +167,24 @@ impl TestApp {
             .await
             .expect("Failed to execute update status request by admin")
     }
+
+    pub async fn logout_customer(&self, token: String) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/protected/logout", &self.address))
+            .bearer_auth(token)
+            .send()
+            .await
+            .expect("Failed to execute logout customer request")
+    }
+
+    pub async fn logout_admin(&self, token: String) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/protected/admin/logout", &self.address))
+            .bearer_auth(token)
+            .send()
+            .await
+            .expect("Failed to execute logout customer request")
+    }
 }
 
 pub fn run_db_migrations(conn: &mut impl MigrationHarness<diesel::pg::Pg>) {

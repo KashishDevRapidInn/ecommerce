@@ -2,6 +2,10 @@ use crate::db::PgPool;
 use crate::schema::products::dsl as product_dsl;
 use diesel::prelude::*;
 use uuid::Uuid;
+
+/******************************************/
+// Adding seed data to products table
+/******************************************/
 pub fn seed_products(pool: PgPool) -> Result<(), diesel::result::Error> {
     let data = vec![
         (Uuid::new_v4(), "Laptop".to_string(), true, 50000),

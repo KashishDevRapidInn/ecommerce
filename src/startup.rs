@@ -1,7 +1,7 @@
 use crate::db::PgPool;
 use crate::middleware::jwt_auth_middleware;
 use crate::routes::{
-    admin::admin::{login_admin, register_admin, update_status},
+    admin::admin::{login_admin, logout_admin, register_admin, update_status},
     customer::customer::{
         login_customer, logout_customer, register_customer, update_customer, view_customer,
     },
@@ -17,6 +17,9 @@ use std::env;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
+/******************************************/
+// Initializing Redis connection
+/******************************************/
 pub async fn init_redis() -> Result<RedisSessionStore, std::io::Error> {
     let redis_uri = env::var("REDIS_URI").expect("Failed to get redis uri");
     RedisSessionStore::new(redis_uri).await.map_err(|e| {
@@ -28,6 +31,9 @@ pub async fn init_redis() -> Result<RedisSessionStore, std::io::Error> {
 pub fn generate_secret_key() -> Key {
     Key::generate()
 }
+/**************************************************************/
+// Application State re reuse the same code in main and tests
+/***************************************************************/
 pub struct Application {
     port: u16,
     server: Server,
@@ -58,6 +64,9 @@ impl Application {
     }
 }
 
+/******************************************/
+// Running Server
+/******************************************/
 pub async fn run_server(listener: TcpListener, pool: PgPool) -> Result<Server, std::io::Error> {
     let redis_store = init_redis().await?;
     let secret_key = generate_secret_key();
@@ -84,7 +93,8 @@ pub async fn run_server(listener: TcpListener, pool: PgPool) -> Result<Server, s
                     .route("/orders/new", web::post().to(create_order))
                     .route("/orders/{id}/view", web::get().to(get_order))
                     .route("/orders/list/all", web::get().to(list_orders))
-                    .route("/admin/update_status", web::post().to(update_status)),
+                    .route("/admin/update_status", web::post().to(update_status))
+                    .route("/admin/logout", web::post().to(logout_admin)),
             )
     })
     .listen(listener)?

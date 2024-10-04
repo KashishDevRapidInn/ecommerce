@@ -12,6 +12,13 @@ pub struct CreateOrder {
     pub product_id: Uuid,
 }
 
+/******************************************/
+// New Order Creation route
+/******************************************/
+/**
+ * @route   POST /protected/orders/new
+ * @access  JWT Protected
+ */
 #[instrument(name = "Create new Order", skip(req_order, pool, session))]
 pub async fn create_order(
     pool: web::Data<PgPool>,
@@ -58,6 +65,13 @@ pub async fn create_order(
     }
 }
 
+/******************************************/
+// Reteriving Order using id
+/******************************************/
+/**
+ * @route   Get /protected/orders/{id}/view
+ * @access  JWT Protected
+ */
 #[instrument(name = "Get Order", skip(order_id, pool, session))]
 pub async fn get_order(
     pool: web::Data<PgPool>,
@@ -84,6 +98,13 @@ pub async fn get_order(
     Ok(HttpResponse::Ok().json(order))
 }
 
+/******************************************/
+// Reteriving All Orders of a customer
+/******************************************/
+/**
+ * @route   Get /protected/orders/list/all
+ * @access  JWT Protected
+ */
 #[instrument(name = "Get All Orders by customer", skip(pool, session))]
 pub async fn list_orders(
     pool: web::Data<PgPool>,

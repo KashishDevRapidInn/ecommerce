@@ -7,6 +7,9 @@ use std::env;
 
 pub type PgPool = Pool<ConnectionManager<PgConnection>>;
 
+/******************************************/
+// Establishing Db Connection
+/******************************************/
 pub fn establish_connection() -> PgPool {
     dotenv().ok();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -16,6 +19,9 @@ pub fn establish_connection() -> PgPool {
         .expect("Failed to create pool.")
 }
 
+/******************************************/
+// Creating new db for tests
+/******************************************/
 pub fn create_database(database_name: &str) {
     dotenv().ok();
     let database_url = env::var("DATABASE_TEST_URL").expect("DATABASE_TEST_URL must be set");
@@ -30,6 +36,9 @@ pub fn create_database(database_name: &str) {
     println!("Database '{}' created", database_name);
 }
 
+/******************************************/
+// Dropping db code
+/******************************************/
 pub fn drop_database(database_name: &str) {
     dotenv().ok();
 

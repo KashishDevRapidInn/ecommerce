@@ -87,3 +87,29 @@ pub async fn missing_inputs_should_return_400() {
     }
     drop_database(&app.database_name);
 }
+
+#[tokio::test]
+async fn logout_check() {
+    let app = spawn_app().await;
+
+    // Step: 1= Customer login and getting jwt token
+    let body = serde_json::json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password
+    });
+    let login_response = app.login_customer(body).await;
+    let login_response_body: Value = login_response.json().await.unwrap();
+    let token = login_response_body["token"]
+        .as_str()
+        .expect("Token not found");
+
+    // Step: 2= Logout customer
+    let logout_response = app.logout_customer(token.to_string()).await;
+
+    assert_eq!(logout_response.status().as_u16(), 200);
+    //Step: 3= Verifying logout
+    let view_customer_response = app.view_customer(token.to_string()).await;
+
+    assert_eq!(view_customer_response.status().as_u16(), 401);
+    drop_database(&app.database_name);
+}

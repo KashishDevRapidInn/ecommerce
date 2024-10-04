@@ -9,6 +9,9 @@ pub struct Claims {
     pub exp: usize,
 }
 
+/******************************************/
+// Creating JWT token
+/******************************************/
 pub fn create_jwt(user_id: &str) -> Result<String, String> {
     let expiration_time = (Utc::now() + Duration::hours(1)).timestamp() as usize;
 
@@ -21,6 +24,10 @@ pub fn create_jwt(user_id: &str) -> Result<String, String> {
     let encoding_key = EncodingKey::from_secret(secret.as_ref());
     encode(&Header::default(), &claims, &encoding_key).map_err(|err| err.to_string())
 }
+
+/******************************************/
+// Verifying JWT token
+/******************************************/
 
 pub fn verify_jwt(token: &str) -> Result<Claims, String> {
     let secret = env::var("JWT_SECRET").expect("Jwt secret not found");
