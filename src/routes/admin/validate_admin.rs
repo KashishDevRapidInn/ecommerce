@@ -1,8 +1,7 @@
 use super::admin::LoginAdminBody;
 use crate::db::PgPool;
-use crate::db_models::Admin;
+use crate::errors::custom::CustomError;
 use crate::schema::admins::dsl::*;
-use crate::Errors::custom::CustomError;
 use argon2::{self, Argon2, PasswordHash, PasswordVerifier};
 use diesel::prelude::*;
 use tracing::instrument;

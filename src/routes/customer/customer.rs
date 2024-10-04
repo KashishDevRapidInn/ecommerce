@@ -1,10 +1,10 @@
 use super::validate_customer::validate_credentials;
 use crate::auth_jwt::auth::create_jwt;
 use crate::db::PgPool;
+use crate::errors::custom::CustomError;
 use crate::schema::customers::dsl::*;
 use crate::session_state::TypedSession;
 use crate::validations::name_email::{UserEmail, UserName};
-use crate::Errors::custom::CustomError;
 use actix_web::{web, HttpResponse, Responder};
 use argon2::{self, password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::prelude::*;
@@ -92,7 +92,7 @@ pub async fn register_customer(
 
     match result {
         Ok(message) => {
-            session.insert_user_id(uuid);
+            let _ = session.insert_user_id(uuid);
             Ok(HttpResponse::Ok().body(message))
         }
         Err(err) => Err(err),
@@ -112,7 +112,7 @@ pub async fn login_customer(
         Ok(id_user) => {
             let token = create_jwt(&id_user.to_string())
                 .map_err(|err| CustomError::AuthenticationError(err.to_string()))?;
-            session.insert_user_id(id_user);
+            let _ = session.insert_user_id(id_user);
             Ok(HttpResponse::Ok().json(json!({"token": token})))
         }
         Err(err) => {
@@ -163,10 +163,7 @@ pub async fn update_customer(
     .map_err(|err| CustomError::BlockingError(err.to_string()))?;
 
     match result {
-        Ok(message) => {
-            session.insert_user_id(user_id);
-            Ok(HttpResponse::Ok().body(message))
-        }
+        Ok(message) => Ok(HttpResponse::Ok().body(message)),
         Err(err) => Err(err),
     }
 }

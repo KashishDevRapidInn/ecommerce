@@ -1,6 +1,6 @@
 use crate::{
-    db::PgPool, schema::orders::dsl as order, session_state::TypedSession,
-    Errors::custom::CustomError,
+    db::PgPool, errors::custom::CustomError, schema::orders::dsl as order,
+    session_state::TypedSession,
 };
 use actix_web::{web, HttpResponse};
 use diesel::prelude::*;

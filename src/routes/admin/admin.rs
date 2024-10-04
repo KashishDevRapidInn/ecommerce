@@ -1,10 +1,11 @@
 use super::validate_admin::validate_admin_credentials;
 use crate::auth_jwt::auth::create_jwt;
 use crate::db::PgPool;
+use crate::errors::custom::CustomError;
 use crate::schema::admins::dsl as admin_dsl;
 use crate::schema::orders::dsl as orders;
 use crate::session_state::TypedSession;
-use crate::Errors::custom::CustomError;
+use crate::validations::name_email::UserName;
 use actix_web::{web, HttpResponse, Responder};
 use argon2::{self, password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::prelude::*;
@@ -19,7 +20,12 @@ pub struct CreateAdminBody {
     username: String,
     password: String,
 }
-
+impl CreateAdminBody {
+    pub fn validate(self) -> Result<UserName, String> {
+        let user_name = UserName::parse(self.username)?;
+        Ok(user_name)
+    }
+}
 #[derive(Deserialize)]
 pub struct LoginAdminBody {
     pub username: String,
@@ -46,7 +52,9 @@ pub async fn register_admin(
     let pool = pool.clone();
     let admin_data = req_admin.into_inner();
     let admin_password = admin_data.password.clone();
-    let admin_username = admin_data.username.clone();
+    let validated_name = admin_data
+        .validate()
+        .map_err(|err| CustomError::ValidationError(err.to_string()))?;
     let uuid = Uuid::new_v4();
     let result = web::block(move || {
         let mut conn = pool.get().expect("Failed to get db connection from Pool");
@@ -60,7 +68,7 @@ pub async fn register_admin(
         diesel::insert_into(admin_dsl::admins)
             .values((
                 admin_dsl::id.eq(uuid),
-                admin_dsl::username.eq(admin_username),
+                admin_dsl::username.eq(validated_name.as_ref()),
                 admin_dsl::password_hash.eq(password_hashed.to_string()),
             ))
             .execute(&mut conn)
@@ -73,7 +81,7 @@ pub async fn register_admin(
 
     match result {
         Ok(message) => {
-            session.insert_admin_id(uuid);
+            let _ = session.insert_admin_id(uuid);
             Ok(HttpResponse::Ok().body(message))
         }
         Err(err) => Err(err),
@@ -93,7 +101,7 @@ pub async fn login_admin(
         Ok(admin_id) => {
             let token = create_jwt(&id_admin.unwrap().to_string())
                 .map_err(|err| CustomError::AuthenticationError(err.to_string()))?;
-            session.insert_admin_id(admin_id);
+            let _ = session.insert_admin_id(admin_id);
             Ok(HttpResponse::Ok().json(serde_json::json!({"token": token})))
         }
         Err(err) => {
@@ -116,7 +124,7 @@ pub async fn update_status(
 ) -> Result<HttpResponse, CustomError> {
     let admin_id = session
         .get_admin_id()
-        .map_err(|err| CustomError::AuthenticationError("User not logged in".to_string()))?;
+        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
     session.renew();
     let mut conn = pool.get().expect("Failed to get db connection from Pool");
     let data = req_update.into_inner();
@@ -126,7 +134,7 @@ pub async fn update_status(
         ));
     }
 
-    let admin_id = admin_id.unwrap();
+    let _admin_id = admin_id.unwrap();
     let result: Result<String, CustomError> = web::block(move || {
         diesel::update(orders::orders.filter(orders::id.eq(data.order_id)))
             .set(orders::status.eq(data.status.to_string()))

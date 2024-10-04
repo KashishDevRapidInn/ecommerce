@@ -1,7 +1,7 @@
-pub mod Errors;
 pub mod auth_jwt;
 pub mod db;
 pub mod db_models;
+pub mod errors;
 pub mod middleware;
 pub mod routes;
 pub mod schema;

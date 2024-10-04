@@ -1,7 +1,6 @@
 use crate::helper::{seed_products, spawn_app};
-use ecommerce::{db::drop_database, schema::orders::product_id};
+use ecommerce::db::drop_database;
 use serde_json::{self, Value};
-use uuid::Uuid;
 
 #[tokio::test]
 async fn order_creation_get_and_list() {
@@ -23,7 +22,7 @@ async fn order_creation_get_and_list() {
         .as_str()
         .expect("Token not found");
 
-    seed_products(app.db_pool.clone());
+    let _ = seed_products(app.db_pool.clone());
     let order_response = app
         .api_client
         .post(&format!("{}/protected/orders/new", &app.address))

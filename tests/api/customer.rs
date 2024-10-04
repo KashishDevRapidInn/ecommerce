@@ -81,3 +81,29 @@ async fn update_customer_and_view_customer_route_testing() {
     assert!(body.contains("updatedemail@gmail.com"));
     drop_database(&app.database_name);
 }
+
+#[tokio::test]
+pub async fn missing_inputs_should_return_400() {
+    let app = spawn_app().await;
+    let test_cases = vec![
+        ("name=kk%20kashyap", "missing the email"),
+        ("email=kk%40gmail.com", "missing the name"),
+        ("", "missing both name and email"),
+    ];
+
+    for (invalid_body, error_message) in test_cases {
+        let register_response = app
+            .api_client
+            .post(&format!("{}/register", &app.address))
+            .json(invalid_body)
+            .send()
+            .await
+            .expect("Failed to execute request.");
+        assert_eq!(
+            register_response.status().as_u16(),
+            400,
+            "The API did not fail with 400 Bad Request when the payload was {}.",
+            error_message
+        )
+    }
+}
