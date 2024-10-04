@@ -4,10 +4,9 @@ use serde_json::{self, Value};
 
 #[tokio::test]
 async fn admin_login_success() {
-    //arrange
     let app = spawn_app().await;
 
-    //act
+    // Step: 1: Admin login and getting jwt token
     let response = app
         .api_client
         .post(&format!("{}/admin/login", &app.address))
@@ -21,7 +20,7 @@ async fn admin_login_success() {
 
     drop_database(&app.database_name);
 
-    //assert
+    // Step: 2= Assert
     let status_code = response.status();
     println!("Response status: {:?}", status_code);
     assert!(response.status().is_success());
@@ -34,79 +33,58 @@ async fn admin_login_success() {
 
 #[tokio::test]
 async fn order_creation_get_and_list() {
-    //arrange
     let app = spawn_app().await;
-    let login_response = app
-        .api_client
-        .post(&format!("{}/login", &app.address))
-        .json(&serde_json::json!({
-            "username": app.test_user.username,
-            "password": app.test_user.password
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
+
+    // Step: 1: Customer login and getting jwt token
+    let body = serde_json::json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password
+    });
+    let login_response = app.login_customer(body).await;
 
     let login_response_body: Value = login_response.json().await.unwrap();
     let token = login_response_body["token"]
         .as_str()
         .expect("Token not found");
 
-    seed_products(app.db_pool.clone());
-    let order_response = app
-        .api_client
-        .post(&format!("{}/protected/orders/new", &app.address))
-        .bearer_auth(token)
-        .json(&serde_json::json!({
-            "product_id": "5fcd7d83-7adf-4d4d-931a-68b9678009db",
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    // Step: 2= Adding seed data to products table
+    let _ = seed_products(app.db_pool.clone());
+
+    // Step: 3= Creating New Order
+    let order_create_body = serde_json::json!({
+        "product_id": "5fcd7d83-7adf-4d4d-931a-68b9678009db",
+    });
+    let order_response = app.create_order(order_create_body, token.to_string()).await;
+
     assert_eq!(order_response.status().as_u16(), 200);
     let order_response_body: Value = order_response.json().await.unwrap();
     let order_id = order_response_body["order_id"]
         .as_str()
         .expect("Token not found");
 
-    let admin_login_response = app
-        .api_client
-        .post(&format!("{}/admin/login", &app.address))
-        .json(&serde_json::json!({
-            "username": app.test_user.username,
-            "password": app.test_user.password
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    // Step: 4= Admin login and getting jwt token for admin
+    let admin_login_body = serde_json::json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password
+    });
+    let admin_login_response = app.login_admin(admin_login_body).await;
 
     let admin_login_response: Value = admin_login_response.json().await.unwrap();
     let admin_token = admin_login_response["token"]
         .as_str()
         .expect("Token not found");
 
+    // Step: 5= Updating order status
+    let update_status_body = serde_json::json!({
+        "order_id": order_id,
+        "status": "shipped"
+    });
     let _update_status_response = app
-        .api_client
-        .post(&format!("{}/protected/admin/update_status", &app.address))
-        .json(&serde_json::json!({
-            "order_id": order_id,
-            "status": "shipped"
-        }))
-        .bearer_auth(admin_token)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+        .update_order_status(update_status_body, admin_token.to_string())
+        .await;
 
-    let order_reterive_response = app
-        .api_client
-        .get(&format!(
-            "{}/protected/orders/{}/view",
-            &app.address, &order_id
-        ))
-        .bearer_auth(token)
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    // Step: 6= Checking order status is updated properly
+    let order_reterive_response = app.get_order(order_id, token.to_string()).await;
     let order_reterive_response_text = order_reterive_response.text().await.unwrap();
     assert!(order_reterive_response_text.contains("shipped"));
     drop_database(&app.database_name);

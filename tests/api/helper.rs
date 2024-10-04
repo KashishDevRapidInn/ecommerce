@@ -1,4 +1,5 @@
 use diesel::prelude::*;
+use diesel::sql_types::Json;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -14,6 +15,7 @@ use ecommerce::schema::products::{self, dsl as product_dsl};
 use ecommerce::startup::Application;
 use ecommerce::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
+use serde_json::Value;
 use std::env;
 use tokio;
 use uuid::Uuid;
@@ -87,6 +89,86 @@ pub struct TestApp {
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
 }
+impl TestApp {
+    pub async fn login_customer(&self, body: Value) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/login", &self.address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute login customer request")
+    }
+
+    pub async fn update_customer(&self, body: Value, token: String) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/protected/update", &self.address))
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute update customer request")
+    }
+
+    pub async fn view_customer(&self, token: String) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/protected/view", &self.address))
+            .bearer_auth(token)
+            .send()
+            .await
+            .expect("Failed to execute view customer request")
+    }
+
+    pub async fn create_order(&self, body: Value, token: String) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/protected/orders/new", &self.address))
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute create order request")
+    }
+
+    pub async fn get_order(&self, order_id: &str, token: String) -> reqwest::Response {
+        self.api_client
+            .get(&format!(
+                "{}/protected/orders/{}/view",
+                &self.address, &order_id
+            ))
+            .bearer_auth(token)
+            .send()
+            .await
+            .expect("Failed to execute get order request")
+    }
+
+    pub async fn get_all_orders(&self, token: String) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/protected/orders/list/all", &self.address))
+            .bearer_auth(token)
+            .send()
+            .await
+            .expect("Failed to execute get all orders by a customer request")
+    }
+
+    pub async fn login_admin(&self, body: Value) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/admin/login", &self.address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute login admin request")
+    }
+
+    pub async fn update_order_status(&self, body: Value, token: String) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/protected/admin/update_status", &self.address))
+            .bearer_auth(token)
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute update status request by admin")
+    }
+}
+
 pub fn run_db_migrations(conn: &mut impl MigrationHarness<diesel::pg::Pg>) {
     conn.run_pending_migrations(MIGRATIONS)
         .expect("Could not run migrations");

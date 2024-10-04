@@ -6,19 +6,13 @@ use serde_json::{self, Value};
 async fn customer_login_success() {
     //arrange
     let app = spawn_app().await;
+    let body = serde_json::json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password
+    });
 
     //act
-    let response = app
-        .api_client
-        .post(&format!("{}/login", &app.address))
-        .json(&serde_json::json!({
-            "username": app.test_user.username,
-            "password": app.test_user.password
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
-
+    let response = app.login_customer(body).await;
     drop_database(&app.database_name);
 
     //assert
@@ -34,45 +28,30 @@ async fn customer_login_success() {
 
 #[tokio::test]
 async fn update_customer_and_view_customer_route_testing() {
-    //arrange
     let app = spawn_app().await;
-    let login_response = app
-        .api_client
-        .post(&format!("{}/login", &app.address))
-        .json(&serde_json::json!({
-            "username": app.test_user.username,
-            "password": app.test_user.password
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
 
+    // Step: 1= Customer login and getting jwt token
+    let body = serde_json::json!({
+        "username": app.test_user.username,
+        "password": app.test_user.password
+    });
+    let login_response = app.login_customer(body).await;
     let login_response_body: Value = login_response.json().await.unwrap();
     let token = login_response_body["token"]
         .as_str()
         .expect("Token not found");
 
-    let update_resposne = app
-        .api_client
-        .post(&format!("{}/protected/update", &app.address))
-        .bearer_auth(token)
-        .json(&serde_json::json!({
-            "username": "Updated username",
-            "email": "updatedemail@gmail.com"
-        }))
-        .send()
-        .await
-        .expect("Failed to execute request.");
+    // Step: 2= Updating customer body
+    let update_body = serde_json::json!({
+        "username": "Updated username",
+        "email": "updatedemail@gmail.com"
+    });
+    let update_resposne = app.update_customer(update_body, token.to_string()).await;
 
     assert_eq!(update_resposne.status().as_u16(), 200);
 
-    let view_customer_response = app
-        .api_client
-        .get(&format!("{}/protected/view", &app.address))
-        .bearer_auth(token)
-        .send()
-        .await
-        .expect("Failed to execute request");
+    //Step: 3= Verifying using view customer
+    let view_customer_response = app.view_customer(token.to_string()).await;
 
     assert_eq!(view_customer_response.status().as_u16(), 200);
     let body = view_customer_response.text().await.unwrap();
@@ -106,4 +85,5 @@ pub async fn missing_inputs_should_return_400() {
             error_message
         )
     }
+    drop_database(&app.database_name);
 }
