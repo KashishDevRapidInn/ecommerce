@@ -1,13 +1,14 @@
 use super::validate_customer::validate_credentials;
 use crate::auth_jwt::auth::create_jwt;
 use crate::db::PgPool;
-use crate::errors::custom::CustomError;
+use crate::errors::custom::{AuthError, CustomError, DbError};
 use crate::schema::customers::dsl::*;
 use crate::session_state::TypedSession;
 use crate::validations::name_email::{UserEmail, UserName};
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse};
 use argon2::{self, password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
 use rand::Rng;
 use serde::Deserialize;
 use serde_json::json;
@@ -71,39 +72,34 @@ pub async fn register_customer(
         .validate()
         .map_err(|err| CustomError::ValidationError(err.to_string()))?;
     let uuid = Uuid::new_v4();
-    let result = web::block(move || {
-        let mut conn = pool.get().expect("Failed to get db connection from Pool");
-        let argon2 = Argon2::default();
+    let mut conn = pool
+        .get()
+        .await
+        .expect("Failed to get db connection from Pool");
+    let argon2 = Argon2::default();
 
-        let salt = generate_random_salt();
-        let password_hashed = argon2
-            .hash_password(user_password.as_bytes(), &salt)
-            .map_err(|err| CustomError::HashingError(err.to_string()))?;
+    let salt = generate_random_salt();
+    let password_hashed = argon2
+        .hash_password(user_password.as_bytes(), &salt)
+        .map_err(|err| CustomError::HashingError(err.to_string()))?;
 
-        // let user_name = customer_data.username.clone();
-        // let user_email = customer_data.email.clone();
-        diesel::insert_into(customers)
-            .values((
-                id.eq(uuid),
-                username.eq(validated_name.as_ref()),
-                password_hash.eq(password_hashed.to_string()),
-                email.eq(validated_email.as_ref()),
-            ))
-            .execute(&mut conn)
-            .map_err(|err| CustomError::QueryError(err.to_string()))?;
-
-        Ok::<_, CustomError>("User created successfully".to_string())
-    })
-    .await
-    .map_err(|err| CustomError::BlockingError(err.to_string()))?;
-
-    match result {
-        Ok(message) => {
-            let _ = session.insert_user_id(uuid);
-            Ok(HttpResponse::Ok().body(message))
-        }
-        Err(err) => Err(err),
+    let result = diesel::insert_into(customers)
+        .values((
+            id.eq(uuid),
+            username.eq(validated_name.as_ref()),
+            password_hash.eq(password_hashed.to_string()),
+            email.eq(validated_email.as_ref()),
+        ))
+        .execute(&mut conn)
+        .await
+        .map_err(|err| CustomError::DatabaseError(DbError::QueryBuilderError(err.to_string())))?;
+    if result == 0 {
+        return Err(CustomError::DatabaseError(DbError::InsertionError(
+            "Failed data insertion in db".to_string(),
+        )));
     }
+    let _ = session.insert_user_id(uuid);
+    Ok(HttpResponse::Ok().body("User created successfully".to_string()))
 }
 
 /******************************************/
@@ -124,13 +120,16 @@ pub async fn login_customer(
 
     match user_id {
         Ok(id_user) => {
-            let token = create_jwt(&id_user.to_string())
-                .map_err(|err| CustomError::AuthenticationError(err.to_string()))?;
+            let token = create_jwt(&id_user.to_string()).map_err(|err| {
+                CustomError::AuthenticationError(AuthError::JwtAuthenticationError(err.to_string()))
+            })?;
             let _ = session.insert_user_id(id_user);
             Ok(HttpResponse::Ok().json(json!({"token": token})))
         }
         Err(err) => {
-            return Err(CustomError::AuthenticationError(err.to_string()))?;
+            return Err(CustomError::AuthenticationError(
+                AuthError::OtherAuthenticationError(err.to_string()),
+            ));
         }
     }
 }
@@ -161,9 +160,11 @@ pub async fn update_customer(
     req_user: web::Json<UpdateCustomerBody>,
     session: TypedSession,
 ) -> Result<HttpResponse, CustomError> {
-    let user_id = session
-        .get_user_id()
-        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
+    let user_id = session.get_user_id().map_err(|_| {
+        CustomError::AuthenticationError(AuthError::SessionAuthenticationError(
+            "User not found".to_string(),
+        ))
+    })?;
     let pool = pool.clone();
     let customer_data = req_user.into_inner();
     let (validated_name, validated_email) = customer_data
@@ -171,30 +172,32 @@ pub async fn update_customer(
         .map_err(|err| CustomError::ValidationError(err.to_string()))?;
     if user_id.is_none() {
         return Err(CustomError::AuthenticationError(
-            "User not found".to_string(),
+            AuthError::SessionAuthenticationError("User not found".to_string()),
         ));
     }
 
     let user_id = user_id.unwrap();
-    let result = web::block(move || {
-        let mut conn = pool.get().expect("Failed to get db connection from Pool");
-        diesel::update(customers.find(user_id))
-            .set((
-                username.eq(validated_name.as_ref()),
-                email.eq(validated_email.as_ref()),
-            ))
-            .execute(&mut conn)
-            .map_err(|err| CustomError::QueryError(err.to_string()))?;
+    let mut conn = pool
+        .get()
+        .await
+        .expect("Failed to get db connection from Pool");
+    let result = diesel::update(customers.find(user_id))
+        .set((
+            username.eq(validated_name.as_ref()),
+            email.eq(validated_email.as_ref()),
+        ))
+        .execute(&mut conn)
+        .await
+        .map_err(|err| CustomError::DatabaseError(DbError::QueryBuilderError(err.to_string())))?;
 
-        Ok::<_, CustomError>("User Updated successfully".to_string())
-    })
-    .await
-    .map_err(|err| CustomError::BlockingError(err.to_string()))?;
-
-    match result {
-        Ok(message) => Ok(HttpResponse::Ok().body(message)),
-        Err(err) => Err(err),
+    if result == 0 {
+        return Err(CustomError::DatabaseError(DbError::UpdationError(
+            "Failed data update data in db".to_string(),
+        )));
     }
+
+    // If successful, respond with a success message
+    Ok(HttpResponse::Ok().body("User updated successfully".to_string()))
 }
 
 /******************************************/
@@ -209,13 +212,18 @@ pub async fn view_customer(
     pool: web::Data<PgPool>,
     session: TypedSession,
 ) -> Result<HttpResponse, CustomError> {
-    let user_id = session
-        .get_user_id()
-        .map_err(|_| CustomError::AuthenticationError("User not logged in".to_string()))?;
-    let mut conn = pool.get().expect("Failed to get db connection from Pool");
+    let user_id = session.get_user_id().map_err(|_| {
+        CustomError::AuthenticationError(AuthError::SessionAuthenticationError(
+            "User not found".to_string(),
+        ))
+    })?;
+    let mut conn = pool
+        .get()
+        .await
+        .expect("Failed to get db connection from Pool");
     if user_id.is_none() {
         return Err(CustomError::AuthenticationError(
-            "User not found".to_string(),
+            AuthError::SessionAuthenticationError("User not found".to_string()),
         ));
     }
     let user_id = user_id.unwrap();
@@ -224,7 +232,8 @@ pub async fn view_customer(
     let customer: (String, String) = customers
         .filter(id.eq(user_id))
         .select((username, email))
-        .first(&mut conn) // if used load then I would have got Vec<(String, String)>
-        .map_err(|err| CustomError::QueryError(err.to_string()))?;
+        .first(&mut conn)
+        .await // if used load then I would have got Vec<(String, String)>
+        .map_err(|err| CustomError::DatabaseError(DbError::QueryBuilderError(err.to_string())))?;
     Ok(HttpResponse::Ok().json(customer))
 }

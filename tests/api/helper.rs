@@ -1,12 +1,14 @@
 use diesel::prelude::*;
 use diesel::sql_types::Json;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+use diesel_async_migrations::{embed_migrations, EmbeddedMigrations};
+pub const MIGRATIONS: EmbeddedMigrations = diesel_async_migrations::embed_migrations!("migrations");
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-use diesel::r2d2::{ConnectionManager, Pool};
+use diesel_async::pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager};
+use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, AsyncPgConnection};
 use diesel_migrations::MigrationHarness;
-use dotenv::dotenv;
+use ecommerce::config::configuration;
 use ecommerce::db::create_database;
 use ecommerce::db::PgPool;
 use ecommerce::schema::admins::{self, dsl as admin_dsl};
@@ -16,24 +18,19 @@ use ecommerce::startup::Application;
 use ecommerce::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
 use serde_json::Value;
-use std::env;
 use tokio;
 use uuid::Uuid;
 
 static TRACING: Lazy<()> = Lazy::new(|| {
-    dotenv().ok();
     let default_filter_level = "info".to_string();
     let subscriber_name = "test".to_string();
-    // We cannot assign the output of `get_subscriber` to a variable based on the value of `TEST_LOG`
-    // because the sink is part of the type returned by `get_subscriber`, therefore they are not the
-    // same type. We could work around it, but this is the most straight-forward way of moving forward.
-    if std::env::var("TEST_LOG").is_ok() {
-        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
-        init_subscriber(subscriber);
-    } else {
-        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::sink);
-        init_subscriber(subscriber);
-    };
+    // if std::env::var("TEST_LOG").is_ok() {
+    //     let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
+    //     init_subscriber(subscriber);
+    // } else {
+    let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::sink);
+    init_subscriber(subscriber);
+    // };
 });
 
 pub struct TestUser {
@@ -58,7 +55,10 @@ impl TestUser {
             .unwrap()
             .to_string();
         // dbg!(&hashed_password);
-        let mut conn = pool.get().expect("Failed to get db connection from pool");
+        let mut conn = pool
+            .get()
+            .await
+            .expect("Failed to get db connection from pool");
 
         diesel::insert_into(customer_dsl::customers)
             .values((
@@ -68,6 +68,7 @@ impl TestUser {
                 customer_dsl::email.eq(self.user_email.clone()),
             ))
             .execute(&mut conn)
+            .await
             .expect("Failed to create test customers.");
 
         diesel::insert_into(admin_dsl::admins)
@@ -77,6 +78,7 @@ impl TestUser {
                 admin_dsl::password_hash.eq(hashed_password.clone()),
             ))
             .execute(&mut conn)
+            .await
             .expect("Failed to create test admin.");
     }
 }
@@ -88,6 +90,7 @@ pub struct TestApp {
     pub database_name: String,
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
+    pub test_db_url: String,
 }
 impl TestApp {
     pub async fn login_customer(&self, body: Value) -> reqwest::Response {
@@ -187,30 +190,49 @@ impl TestApp {
     }
 }
 
-pub fn run_db_migrations(conn: &mut impl MigrationHarness<diesel::pg::Pg>) {
-    conn.run_pending_migrations(MIGRATIONS)
-        .expect("Could not run migrations");
-}
+pub async fn run_migrations(url: impl AsRef<str>) -> Result<(), std::io::Error> {
+    // Establish a connection
+    let mut conn = AsyncPgConnection::establish(url.as_ref())
+        .await
+        .expect("Failed to run migrations");
 
+    // Run pending migrations
+    MIGRATIONS
+        .run_pending_migrations(&mut conn)
+        .await
+        .expect("Failed to run migrations");
+
+    Ok(())
+}
 pub async fn spawn_app() -> TestApp {
     // To Ensure that the tracing stack is only initialized once
     Lazy::force(&TRACING);
 
-    dotenv().ok();
     let database_name = Uuid::new_v4().to_string();
-    let database_url = env::var("DATABASE_TEST_URL").expect("DATABASE_TEST_URL must be set");
-    create_database(&database_name);
+    let config = configuration::Settings::new().expect("Failed to load configurations");
+    create_database(&database_name, config.database.test_url.clone()).await;
 
-    let new_database_url = format!("{}/{}", database_url, database_name);
-    let manager = ConnectionManager::<PgConnection>::new(new_database_url.clone());
-    let pool = Pool::builder()
-        .build(manager)
-        .expect("Failed to create pool.");
+    let new_database_url = format!("{}/{}", config.database.test_url, database_name);
+
+    //building pool
+    let manager = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(
+        new_database_url.clone(),
+    );
+    let pool = Pool::builder(manager)
+        .max_size(16)
+        .build()
+        .expect("Failed to create pool");
     // Run migrations
-    let mut conn = pool.get().expect("Couldn't get db connection from Pool");
-    run_db_migrations(&mut conn);
+    // let mut conn = pool
+    //     .get()
+    //     .await
+    //     .expect("Couldn't get db connection from Pool");
 
-    let application = Application::build(0, pool.clone())
+    if let Err(err) = run_migrations(&new_database_url).await {
+        eprintln!("Error running migrations: {}", err);
+    }
+
+    let application = Application::build(0, pool.clone(), config.redis.uri)
         .await
         .expect("Failed to build application");
     let application_port = application.port();
@@ -229,19 +251,23 @@ pub async fn spawn_app() -> TestApp {
         database_name,
         test_user: TestUser::generate(),
         api_client: client,
+        test_db_url: config.database.test_url,
     };
     testapp.test_user.store(&testapp.db_pool).await;
     testapp
 }
 
-pub fn seed_products(pool: PgPool) -> Result<(), diesel::result::Error> {
+pub async fn seed_products(pool: PgPool) -> Result<(), diesel::result::Error> {
     let data = vec![(
         Uuid::parse_str("5fcd7d83-7adf-4d4d-931a-68b9678009db").unwrap(),
         "Laptop".to_string(),
         true,
         50000,
     )];
-    let mut conn = pool.get().expect("Failed to get db connection from Pool");
+    let mut conn = pool
+        .get()
+        .await
+        .expect("Failed to get db connection from Pool");
     for (id, name, is_available, price) in data {
         diesel::insert_into(product_dsl::products)
             .values((
@@ -250,7 +276,8 @@ pub fn seed_products(pool: PgPool) -> Result<(), diesel::result::Error> {
                 product_dsl::is_available.eq(is_available),
                 product_dsl::price.eq(price),
             ))
-            .execute(&mut conn)?;
+            .execute(&mut conn)
+            .await?;
     }
 
     println!("successfully added products");

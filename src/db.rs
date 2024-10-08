@@ -1,37 +1,39 @@
-use diesel::pg::PgConnection;
-use diesel::prelude::*;
-use diesel::r2d2::{ConnectionManager, Pool};
+use crate::config::configuration;
 use diesel::sql_query;
-use dotenv::dotenv;
-use std::env;
+use diesel_async::pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager};
+use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, AsyncPgConnection};
 
-pub type PgPool = Pool<ConnectionManager<PgConnection>>;
+pub type PgPool = Pool<AsyncPgConnection>;
 
 /******************************************/
 // Establishing Db Connection
 /******************************************/
-pub fn establish_connection() -> PgPool {
-    dotenv().ok();
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let manager = ConnectionManager::<PgConnection>::new(database_url);
-    Pool::builder()
-        .build(manager)
-        .expect("Failed to create pool.")
+pub async fn establish_connection(database_url: &str) -> PgPool {
+    let manager =
+        AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
+
+    // Build the pool
+    let pool = Pool::builder(manager)
+        .max_size(16)
+        .build()
+        .expect("Failed to create pool");
+
+    pool
 }
 
 /******************************************/
 // Creating new db for tests
 /******************************************/
-pub fn create_database(database_name: &str) {
-    dotenv().ok();
-    let database_url = env::var("DATABASE_TEST_URL").expect("DATABASE_TEST_URL must be set");
-
-    let mut connection =
-        PgConnection::establish(&database_url).expect("Failed to connect to Postgres");
+pub async fn create_database(database_name: &str, database_url: String) {
+    let mut connection = AsyncPgConnection::establish(&database_url)
+        .await
+        .expect("Failed to connect to Postgres");
 
     let create_db_query = format!(r#"CREATE DATABASE "{}";"#, database_name);
     sql_query(&create_db_query)
         .execute(&mut connection)
+        .await
         .expect("Failed to create database");
     println!("Database '{}' created", database_name);
 }
@@ -39,26 +41,23 @@ pub fn create_database(database_name: &str) {
 /******************************************/
 // Dropping db code
 /******************************************/
-pub fn drop_database(database_name: &str) {
-    dotenv().ok();
-
-    let default_db_url = env::var("DATABASE_TEST_URL").expect("DATABASE_TEST_URL must be set");
-
+pub async fn drop_database(database_name: &str, default_db_url: String) {
     // Here I'm connecting to Postgres
-    let mut connection = PgConnection::establish(&default_db_url)
+    let mut connection = AsyncPgConnection::establish(&default_db_url)
+        .await
         .expect("Failed to connect to the maintenance database");
 
-    // My drop db logic wasn't working because I was trying to drop db which had active connection, so i need to dekete my active connections
+    // My drop db logic wasn't working because I was trying to drop db which had active connection, so i need to delete my active connections
     let terminate_query = format!(
         r#"
-        SELECT pg_terminate_backend(pid) 
-        FROM pg_stat_activity 
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
         WHERE datname = '{}';
     "#,
         database_name
     );
 
-    if let Err(e) = sql_query(&terminate_query).execute(&mut connection) {
+    if let Err(e) = sql_query(&terminate_query).execute(&mut connection).await {
         eprintln!("Failed to terminate connections: {}", e);
         return;
     }
@@ -66,7 +65,7 @@ pub fn drop_database(database_name: &str) {
     // Dropping db
     let drop_query = format!(r#"DROP DATABASE IF EXISTS "{}";"#, database_name);
 
-    if let Err(e) = sql_query(&drop_query).execute(&mut connection) {
+    if let Err(e) = sql_query(&drop_query).execute(&mut connection).await {
         eprintln!("Failed to drop database: {}", e);
     } else {
         println!("Database '{}' dropped successfully.", database_name);

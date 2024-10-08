@@ -1,7 +1,7 @@
 use crate::db::PgPool;
 use crate::middleware::jwt_auth_middleware;
 use crate::routes::{
-    admin::admin::{login_admin, logout_admin, register_admin, update_status},
+    admin::admin::{fetch_all_orders, login_admin, logout_admin, register_admin, update_status},
     customer::customer::{
         login_customer, logout_customer, register_customer, update_customer, view_customer,
     },
@@ -13,15 +13,14 @@ use actix_session::SessionMiddleware;
 use actix_web::cookie::Key;
 use actix_web::{dev::Server, web, App, HttpServer};
 use actix_web_lab::middleware::from_fn;
-use std::env;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 
 /******************************************/
 // Initializing Redis connection
 /******************************************/
-pub async fn init_redis() -> Result<RedisSessionStore, std::io::Error> {
-    let redis_uri = env::var("REDIS_URI").expect("Failed to get redis uri");
+pub async fn init_redis(redis_uri: String) -> Result<RedisSessionStore, std::io::Error> {
+    // let redis_uri = env::var("REDIS_URI").expect("Failed to get redis uri");
     RedisSessionStore::new(redis_uri).await.map_err(|e| {
         eprintln!("Failed to create Redis session store: {:?}", e);
         std::io::Error::new(std::io::ErrorKind::Other, "Redis connection failed")
@@ -40,7 +39,7 @@ pub struct Application {
 }
 
 impl Application {
-    pub async fn build(port: u16, pool: PgPool) -> Result<Self, std::io::Error> {
+    pub async fn build(port: u16, pool: PgPool, redis_uri: String) -> Result<Self, std::io::Error> {
         let listener = if port == 0 {
             TcpListener::bind("127.0.0.1:0")?
         } else {
@@ -50,7 +49,7 @@ impl Application {
 
         let actual_port = listener.local_addr()?.port();
 
-        let server = run_server(listener, pool.clone()).await?;
+        let server = run_server(listener, pool.clone(), redis_uri).await?;
         Ok(Self {
             port: actual_port,
             server,
@@ -67,10 +66,13 @@ impl Application {
 /******************************************/
 // Running Server
 /******************************************/
-pub async fn run_server(listener: TcpListener, pool: PgPool) -> Result<Server, std::io::Error> {
-    let redis_store = init_redis().await?;
+pub async fn run_server(
+    listener: TcpListener,
+    pool: PgPool,
+    redis_uri: String,
+) -> Result<Server, std::io::Error> {
+    let redis_store = init_redis(redis_uri).await?;
     let secret_key = generate_secret_key();
-
     let server = HttpServer::new(move || {
         App::new()
             .wrap(TracingLogger::default())
@@ -94,7 +96,8 @@ pub async fn run_server(listener: TcpListener, pool: PgPool) -> Result<Server, s
                     .route("/orders/{id}/view", web::get().to(get_order))
                     .route("/orders/list/all", web::get().to(list_orders))
                     .route("/admin/update_status", web::post().to(update_status))
-                    .route("/admin/logout", web::post().to(logout_admin)),
+                    .route("/admin/logout", web::post().to(logout_admin))
+                    .route("/admin/fetch_all_orders", web::get().to(fetch_all_orders)),
             )
     })
     .listen(listener)?

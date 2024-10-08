@@ -1,6 +1,7 @@
 use crate::helper::spawn_app;
 use ecommerce::db::drop_database;
 use serde_json::{self, Value};
+use std::time::Duration;
 
 #[tokio::test]
 async fn customer_login_success() {
@@ -13,7 +14,7 @@ async fn customer_login_success() {
 
     //act
     let response = app.login_customer(body).await;
-    drop_database(&app.database_name);
+    drop_database(&app.database_name, app.test_db_url).await;
 
     //assert
     let status_code = response.status();
@@ -40,6 +41,7 @@ async fn update_customer_and_view_customer_route_testing() {
     let token = login_response_body["token"]
         .as_str()
         .expect("Token not found");
+    tokio::time::sleep(Duration::from_secs(12)).await;
 
     // Step: 2= Updating customer body
     let update_body = serde_json::json!({
@@ -58,7 +60,7 @@ async fn update_customer_and_view_customer_route_testing() {
     println!("view customer response {:?}", body);
     assert!(body.contains("Updated username"));
     assert!(body.contains("updatedemail@gmail.com"));
-    drop_database(&app.database_name);
+    drop_database(&app.database_name, app.test_db_url).await;
 }
 
 #[tokio::test]
@@ -85,7 +87,7 @@ pub async fn missing_inputs_should_return_400() {
             error_message
         )
     }
-    drop_database(&app.database_name);
+    drop_database(&app.database_name, app.test_db_url).await;
 }
 
 #[tokio::test]
@@ -102,6 +104,7 @@ async fn logout_check() {
     let token = login_response_body["token"]
         .as_str()
         .expect("Token not found");
+    tokio::time::sleep(Duration::from_secs(12)).await;
 
     // Step: 2= Logout customer
     let logout_response = app.logout_customer(token.to_string()).await;
@@ -111,5 +114,5 @@ async fn logout_check() {
     let view_customer_response = app.view_customer(token.to_string()).await;
 
     assert_eq!(view_customer_response.status().as_u16(), 401);
-    drop_database(&app.database_name);
+    drop_database(&app.database_name, app.test_db_url).await;
 }

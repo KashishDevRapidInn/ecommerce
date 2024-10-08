@@ -1,4 +1,5 @@
 pub mod auth_jwt;
+pub mod config;
 pub mod db;
 pub mod db_models;
 pub mod errors;

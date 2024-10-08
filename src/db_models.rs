@@ -20,10 +20,10 @@ pub struct Customer {
 #[derive(Queryable, Debug, Deserialize, Serialize)]
 pub struct Order {
     pub id: Uuid,
-    pub customer_id: Option<Uuid>,
-    pub status: String,
-    pub created_at: Option<NaiveDateTime>,
-    pub product_id: Option<Uuid>,
+    pub customer_id: Uuid,
+    pub status: crate::routes::order::order::OrderStatus,
+    pub created_at: NaiveDateTime,
+    pub product_id: Uuid,
 }
 
 #[derive(Queryable, Debug, Deserialize, Serialize)]
