@@ -75,33 +75,15 @@ impl ResponseError for CustomError {
             },
             CustomError::AuthenticationError(err) => match err {
                 AuthError::SessionAuthenticationError(_) => {
-                    HttpResponse::InternalServerError().body(self.to_string())
+                    HttpResponse::Unauthorized().body(self.to_string())
                 }
                 AuthError::JwtAuthenticationError(_) => {
-                    HttpResponse::InternalServerError().body(self.to_string())
+                    HttpResponse::Unauthorized().body(self.to_string())
                 }
                 AuthError::OtherAuthenticationError(_) => {
-                    HttpResponse::InternalServerError().body(self.to_string())
+                    HttpResponse::Unauthorized().body(self.to_string())
                 }
             },
         }
     }
 }
-
-//concurreny vs parallel
-
-//enums in order -> done
-//jsonwebtoken claim -> done
-//admin api -> done
-//spwan for hash -> done
-//deadpool -> done
-//env-> config -> done
-// map all the errors -> done
-
-// Added enums in order schema
-// Added more information in JWT claim
-// Added fetch_all_orders api for admin
-// Added functionality to perform hashing in a seperate thread
-// Made db_operations async
-// Replaced .env with a config.rs file using config crate
-// Added more detailed error handling
