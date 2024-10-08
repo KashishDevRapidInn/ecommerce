@@ -69,7 +69,7 @@ pub async fn register_admin(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
     let argon2 = Argon2::default();
 
     let salt = generate_random_salt();
@@ -163,7 +163,7 @@ pub async fn update_status(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
     let data: UpdateStatusBody = req_update.into_inner();
     if admin_id.is_none() {
         return Err(CustomError::AuthenticationError(
@@ -213,7 +213,7 @@ pub async fn fetch_all_orders(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
     let orders = orders::orders
         .load::<Order>(&mut conn)
         .await

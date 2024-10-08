@@ -6,7 +6,7 @@ use crate::{
 };
 use actix_web::{web, HttpResponse};
 use diesel::prelude::*;
-use diesel_async::{AsyncConnection, RunQueryDsl};
+use diesel_async::RunQueryDsl;
 use diesel_derive_enum;
 use tracing::instrument;
 use uuid::Uuid;
@@ -54,7 +54,7 @@ pub async fn create_order(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
     let result = diesel::insert_into(order::orders)
         .values((
             order::id.eq(order_id),
@@ -103,7 +103,7 @@ pub async fn get_order(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
     let order: (Uuid, Uuid, OrderStatus) = order::orders
         .filter(order::id.eq(order_id.into_inner()))
         .select((order::product_id, order::customer_id, order::status))
@@ -142,7 +142,7 @@ pub async fn list_orders(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
 
     let order = order::orders
         .filter(order::customer_id.eq(customer_id))

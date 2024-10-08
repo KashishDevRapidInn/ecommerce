@@ -17,7 +17,7 @@ async fn get_stored_credentials(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
 
     let row: Result<Option<Vec<(String, Uuid)>>, diesel::result::Error> = customers
         .filter(username.eq(user_name))

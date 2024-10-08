@@ -75,7 +75,7 @@ pub async fn register_customer(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
     let argon2 = Argon2::default();
 
     let salt = generate_random_salt();
@@ -180,7 +180,7 @@ pub async fn update_customer(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
     let result = diesel::update(customers.find(user_id))
         .set((
             username.eq(validated_name.as_ref()),
@@ -220,7 +220,7 @@ pub async fn view_customer(
     let mut conn = pool
         .get()
         .await
-        .expect("Failed to get db connection from Pool");
+        .map_err(|err| CustomError::DatabaseError(DbError::ConnectionError(err.to_string())))?;
     if user_id.is_none() {
         return Err(CustomError::AuthenticationError(
             AuthError::SessionAuthenticationError("User not found".to_string()),

@@ -7,7 +7,6 @@ use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use diesel_async::pooled_connection::{deadpool::Pool, AsyncDieselConnectionManager};
 use diesel_async::RunQueryDsl;
 use diesel_async::{AsyncConnection, AsyncPgConnection};
-use diesel_migrations::MigrationHarness;
 use ecommerce::config::configuration;
 use ecommerce::db::create_database;
 use ecommerce::db::PgPool;

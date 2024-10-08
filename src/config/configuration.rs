@@ -1,6 +1,5 @@
 use config::{Config, ConfigError};
 use serde::Deserialize;
-// use std::convert::TryInto;
 
 #[derive(Debug, Deserialize)]
 pub struct DatabaseSettings {
