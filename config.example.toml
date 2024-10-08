@@ -1,0 +1,22 @@
+################
+### Database ###
+################
+
+# DATABASE URL
+[database]
+url="postgres://postgres:<name>%40<password>@localhost:5000/<db_name>"
+test_url="postgres://postgres:<name>%40<password>@localhost:5000"
+
+################
+### Redis ###
+################
+
+[redis]
+uri="redis://127.0.0.1:6379"
+
+################
+### JWT ###
+################
+
+[jwt]
+secret="jwt_secret"

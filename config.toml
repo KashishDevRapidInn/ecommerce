@@ -1,0 +1,10 @@
+[database]
+url="postgres://postgres:Kashish%40PostgreSql12@localhost:5000/ecommerce"
+test_url="postgres://postgres:Kashish%40PostgreSql12@localhost:5000"
+
+[redis]
+uri="redis://127.0.0.1:6379"
+
+[jwt]
+secret="jwt_secret"
+

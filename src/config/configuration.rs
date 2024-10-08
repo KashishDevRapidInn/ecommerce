@@ -28,7 +28,7 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
         let mut s = Config::default();
-        s.merge(config::File::with_name("src/config/config"))?;
+        s.merge(config::File::with_name("config"))?;
         s.try_into()
     }
 }
